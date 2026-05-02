@@ -1,0 +1,77 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function profileData() {
+      return get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/profiles/$(request.auth.uid))
+        && (profileData().role == 'admin' || profileData().role == 'barber');
+    }
+
+    match /profiles/{uid} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == uid;
+      allow update: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    match /services/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /barberProducts/{barberId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+
+      match /blockedSlots/{slotId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
+      }
+    }
+
+    match /salon/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+
+      match /blockedSlots/{slotId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
+      }
+    }
+
+    match /appointments/{apptId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.clientId == request.auth.uid
+        && request.resource.data.status == 'confirmed';
+
+      allow update: if isSignedIn() && (
+        isAdmin()
+        || (
+          resource.data.clientId == request.auth.uid
+          && resource.data.status == 'confirmed'
+          && request.resource.data.status == 'cancelled'
+          && request.resource.data.clientId == resource.data.clientId
+          && request.resource.data.barberProductId == resource.data.barberProductId
+          && request.resource.data.serviceId == resource.data.serviceId
+        )
+        || (
+          resource.data.status == 'cancelled'
+          && request.resource.data.clientId == request.auth.uid
+          && request.resource.data.status == 'confirmed'
+        )
+      );
+
+      allow delete: if false;
+    }
+  }
+}

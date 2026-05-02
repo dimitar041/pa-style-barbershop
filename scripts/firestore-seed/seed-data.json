@@ -1,0 +1,47 @@
+{
+  "salon": {
+    "main": {
+      "nameBg": "PA Style Studio",
+      "seedVersion": 1
+    }
+  },
+  "services": {
+    "svc_mens_cut": {
+      "nameBg": "Мъжко подстригване",
+      "price": 25,
+      "durationMinutes": 30
+    },
+    "svc_beard": {
+      "nameBg": "Оформяне на брада",
+      "price": 15,
+      "durationMinutes": 20
+    },
+    "svc_cut_beard": {
+      "nameBg": "Подстригване + брада",
+      "price": 35,
+      "durationMinutes": 45
+    },
+    "svc_wash_style": {
+      "nameBg": "Измиване и стилизиране",
+      "price": 20,
+      "durationMinutes": 30
+    }
+  },
+  "barberProducts": {
+    "bp_ivan": {
+      "nameBg": "Иван",
+      "imageUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop",
+      "sortOrder": 0
+    },
+    "bp_georgi": {
+      "nameBg": "Георги",
+      "imageUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop",
+      "sortOrder": 1
+    },
+    "bp_dimitar": {
+      "nameBg": "Димитър",
+      "imageUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop",
+      "sortOrder": 2
+    }
+  }
+}
