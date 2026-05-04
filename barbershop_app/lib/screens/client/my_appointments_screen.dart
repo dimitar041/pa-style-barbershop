@@ -15,24 +15,28 @@ class MyAppointmentsScreen extends StatefulWidget {
 
 class _MyAppointmentsScreenState extends State<MyAppointmentsScreen> {
   final _repo = AppRepository();
-  late Future<_AppointmentsView> _future;
+
+  Map<String, String> _serviceNameById = {};
+  Map<String, double> _servicePriceById = {};
+  Map<String, String> _productNameById = {};
+  bool _metaLoaded = false;
 
   @override
   void initState() {
     super.initState();
-    _future = _load();
+    _loadMeta();
   }
 
-  Future<_AppointmentsView> _load() async {
-    final appts = await _repo.getClientAppointmentsOnce(_repo.currentUid, limit: 20);
+  Future<void> _loadMeta() async {
     final services = await _repo.getServicesOnce();
     final products = await _repo.getBarberProductsOnce();
-    return _AppointmentsView(
-      appointments: appts,
-      serviceNameById: {for (final s in services) s.id: s.nameBg},
-      servicePriceById: {for (final s in services) s.id: s.price},
-      productNameById: {for (final p in products) p.id: p.nameBg},
-    );
+    if (!mounted) return;
+    setState(() {
+      _serviceNameById  = {for (final s in services) s.id: s.nameBg};
+      _servicePriceById = {for (final s in services) s.id: s.price};
+      _productNameById  = {for (final p in products) p.id: p.nameBg};
+      _metaLoaded = true;
+    });
   }
 
   Future<void> _cancelDialog(BuildContext context, AppointmentModel appt) async {
@@ -81,7 +85,6 @@ class _MyAppointmentsScreenState extends State<MyAppointmentsScreen> {
       );
       if (!mounted) return;
       messenger.showSnackBar(const SnackBar(content: Text('Часът е анулиран.')));
-      setState(() => _future = _load());
     } on CancellationTooLateException catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
@@ -106,129 +109,120 @@ class _MyAppointmentsScreenState extends State<MyAppointmentsScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<_AppointmentsView>(
-        future: _future,
-        builder: (context, snap) {
-          final cs = Theme.of(context).colorScheme;
-          if (snap.connectionState != ConnectionState.done) {
-            return const PaScreenShell(child: Center(child: CircularProgressIndicator()));
-          }
-          final view = snap.data;
-          final list = view?.appointments ?? [];
+      body: !_metaLoaded
+          ? const PaScreenShell(child: Center(child: CircularProgressIndicator()))
+          : StreamBuilder<List<AppointmentModel>>(
+              stream: _repo.watchClientAppointments(_repo.currentUid),
+              builder: (context, snap) {
+                final cs = Theme.of(context).colorScheme;
 
-          if (list.isEmpty) {
-            return PaScreenShell(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.event_available_outlined,
-                      size: 64,
-                      color: cs.primary.withValues(alpha: 0.55),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Нямаш запазени часове',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const PaScreenShell(
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+
+                final list = snap.data ?? [];
+
+                if (list.isEmpty) {
+                  return PaScreenShell(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.event_available_outlined,
+                            size: 64,
+                            color: cs.primary.withValues(alpha: 0.55),
                           ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Запази час от началния екран.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: cs.onSurface.withValues(alpha: 0.6),
+                          const SizedBox(height: 20),
+                          Text(
+                            'Нямаш запазени часове',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
                           ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          final nowUtc = DateTime.now().toUtc();
-
-          return PaScreenShell(
-            child: ListView.separated(
-              padding: const EdgeInsets.only(bottom: 16),
-              itemCount: list.length,
-              separatorBuilder: (context, _) => const SizedBox(height: 12),
-              itemBuilder: (context, i) {
-                final ap = list[i];
-                final startLocal = ap.startAtUtc.toLocal();
-                final canCancel = ap.status == AppointmentStatus.confirmed &&
-                    ap.startAtUtc.difference(nowUtc) >= const Duration(hours: 2);
-                final svc = view!.serviceNameById[ap.serviceId] ?? ap.serviceId;
-                final price = view.servicePriceById[ap.serviceId];
-                final priceStr =
-                    price != null ? ' • ${price.toStringAsFixed(2)} лв.' : '';
-                final barber =
-                    view.productNameById[ap.barberProductId] ?? ap.barberProductId;
-                final confirmed = ap.status == AppointmentStatus.confirmed;
-
-                return Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: ListTile(
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      title: Text(
-                        '${startLocal.day.toString().padLeft(2, '0')}.${startLocal.month.toString().padLeft(2, '0')}.${startLocal.year} • '
-                        '${startLocal.hour.toString().padLeft(2, '0')}:${startLocal.minute.toString().padLeft(2, '0')}',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Запази час от началния екран.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: cs.onSurface.withValues(alpha: 0.6),
+                                ),
+                          ),
+                        ],
                       ),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          confirmed
-                              ? 'Статус: Потвърден\n$svc$priceStr • Фризьор: $barber'
-                              : 'Статус: Анулиран${ap.cancelReason != null ? ' • ${ap.cancelReason}' : ''}\n$svc • Фризьор: $barber',
-                          style: TextStyle(
-                            height: 1.35,
-                            color: cs.onSurface.withValues(alpha: 0.85),
+                    ),
+                  );
+                }
+
+                final nowUtc = DateTime.now().toUtc();
+
+                return PaScreenShell(
+                  child: ListView.separated(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    itemCount: list.length,
+                    separatorBuilder: (context, _) => const SizedBox(height: 12),
+                    itemBuilder: (context, i) {
+                      final ap = list[i];
+                      final startLocal = ap.startAtUtc.toLocal();
+                      final canCancel = ap.status == AppointmentStatus.confirmed &&
+                          ap.startAtUtc.difference(nowUtc) >= const Duration(hours: 2);
+                      final svc = _serviceNameById[ap.serviceId] ?? ap.serviceId;
+                      final price = _servicePriceById[ap.serviceId];
+                      final priceStr =
+                          price != null ? ' • ${price.toStringAsFixed(2)} лв.' : '';
+                      final barber =
+                          _productNameById[ap.barberProductId] ?? ap.barberProductId;
+                      final confirmed = ap.status == AppointmentStatus.confirmed;
+
+                      return Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: ListTile(
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            title: Text(
+                              '${startLocal.day.toString().padLeft(2, '0')}.${startLocal.month.toString().padLeft(2, '0')}.${startLocal.year} • '
+                              '${startLocal.hour.toString().padLeft(2, '0')}:${startLocal.minute.toString().padLeft(2, '0')}',
+                              style: const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                confirmed
+                                    ? 'Статус: Потвърден\n$svc$priceStr • Фризьор: $barber'
+                                    : 'Статус: Анулиран${ap.cancelReason != null ? ' • ${ap.cancelReason}' : ''}\n$svc • Фризьор: $barber',
+                                style: TextStyle(
+                                  height: 1.35,
+                                  color: cs.onSurface.withValues(alpha: 0.85),
+                                ),
+                              ),
+                            ),
+                            isThreeLine: true,
+                            leading: Icon(
+                              confirmed
+                                  ? Icons.check_circle_outline_rounded
+                                  : Icons.cancel_outlined,
+                              color: confirmed
+                                  ? cs.primary
+                                  : cs.onSurface.withValues(alpha: 0.45),
+                            ),
+                            trailing: ap.status == AppointmentStatus.confirmed
+                                ? FilledButton.tonal(
+                                    onPressed:
+                                        canCancel ? () => _cancelDialog(context, ap) : null,
+                                    child: Text(canCancel ? 'Анулирай' : 'Късно'),
+                                  )
+                                : null,
                           ),
                         ),
-                      ),
-                      isThreeLine: true,
-                      leading: Icon(
-                        confirmed
-                            ? Icons.check_circle_outline_rounded
-                            : Icons.cancel_outlined,
-                        color: confirmed
-                            ? cs.primary
-                            : cs.onSurface.withValues(alpha: 0.45),
-                      ),
-                      trailing: ap.status == AppointmentStatus.confirmed
-                          ? FilledButton.tonal(
-                              onPressed:
-                                  canCancel ? () => _cancelDialog(context, ap) : null,
-                              child: Text(canCancel ? 'Анулирай' : 'Късно'),
-                            )
-                          : null,
-                    ),
+                      );
+                    },
                   ),
                 );
               },
             ),
-          );
-        },
-      ),
     );
   }
-}
-
-class _AppointmentsView {
-  _AppointmentsView({
-    required this.appointments,
-    required this.serviceNameById,
-    required this.servicePriceById,
-    required this.productNameById,
-  });
-
-  final List<AppointmentModel> appointments;
-  final Map<String, String> serviceNameById;
-  final Map<String, double> servicePriceById;
-  final Map<String, String> productNameById;
 }

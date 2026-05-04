@@ -234,7 +234,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
                                 tileColor: Colors.orange.withValues(alpha: 0.15),
                                 title: Text(WorkSchedule.formatSlot(slotLocal)),
                                 subtitle: Text(
-                                  'Запазен • $clientName'
+                                  'Запазен'
                                   '${clientPhone.isNotEmpty ? ' • $clientPhone' : ''}\n'
                                   'Услуга: $serviceName',
                                 ),
